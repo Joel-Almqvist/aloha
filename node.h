@@ -1,13 +1,20 @@
 #ifndef ALOHANODE_H
 #define ALOHANODE_H
 
-
 #include <iostream>
 #include <string>
 #include <cstdlib>
 #include <cmath>
 #include <vector>
 using namespace std;
+
+
+enum Status // unscoped
+{
+IDLE = 0,
+TRANS = 1,
+BACKLOG = 2,
+};
 
 class AlohaNode{
 private:

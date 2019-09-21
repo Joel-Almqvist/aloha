@@ -1,21 +1,16 @@
-#include "node.h";
+#include "node.h"
 using namespace std;
 
 const double DEFAULT_QR = 0.01;
 const int NR_OF_NODES = 50;
 
-enum Status // unscoped
-{
-IDLE = 0,
-TRANS = 1,
-BACKLOG = 2,
-};
+
 
 AlohaNode::AlohaNode(double qr){
   isBacklogged = false;
   //cout << "inside constructor\n";
   state = Status::IDLE;
-  qr = qr;
+  AlohaNode::qr = qr;
   // constructor
 }
 
@@ -55,5 +50,7 @@ int AlohaNode::backlogTick(){
 void AlohaNode::collided(){
   state = Status::BACKLOG;
   int mod = round(1/qr);
+  //cout << qr << endl;
   sleep = rand() % mod;
+  cout << "Collision!" << endl;
 }
