@@ -10,13 +10,16 @@ const double DEFAULT_QR = 0.2;
 // The chance for a single node to receive a packet this slot
 const double QA = 0.1;
 const int NR_OF_NODES = 50;
+const int NR_OF_ITER = 20;
 
-void tick(double QA, vector<AlohaNode>* vect2){
-  vector<AlohaNode> vect = *vect2;
+void tick(double QA, vector<AlohaNode>* vecPtr){
+  vector<AlohaNode>& vect = *vecPtr;
   int pSpace = round(1/QA);
   bool lineUsed = false;
   bool traversed = false;
   AlohaNode* currNode;
+
+
 
   for(int i = 0; i < vect.size(); i++){
     currNode = &vect[i];
@@ -27,12 +30,11 @@ void tick(double QA, vector<AlohaNode>* vect2){
     }
     currNode->backlogTick();
 
-    //cout << currNode->getState() << endl;
     if(currNode->getState() != Status::IDLE){
-      //cout << "not idle" << endl;
+      // The node is either backlogged and or transmitting
       if(lineUsed){
-        // Collide all previous sending nodes
         if(!traversed){
+          // Collide all previous sending nodes
           for(int j = 0; j< i+1; j++){
             if(vect[j].getState() != Status::IDLE){
               vect[j].collided();
@@ -46,18 +48,18 @@ void tick(double QA, vector<AlohaNode>* vect2){
           currNode->collided();
         }
       }
+
       else{
+        // First time a node uses the line this tick
         lineUsed = true;
       }
     }
   }
-
-
-  cout << QA << endl;
 }
 
 
 int main(int argc, char *argv[]) {
+  // Set the seed
   srand(time(NULL));
   double qr;
   if(argc > 2){
@@ -76,14 +78,13 @@ int main(int argc, char *argv[]) {
 
 
 
+  for(int i = 0; i < NR_OF_ITER; i++){
+    cout << "Iteration " << i << endl;
+    tick(QA, &vect);
 
-  /*
-  for(int i = 0; i < vect.size(); i++){
-    currNode = &vect[i];
-    if(currNode->getState)
-
+    cout << endl;
   }
-  */
 
-  tick(QA, &vect);
+
+  //tick(QA, &vect);
 }
