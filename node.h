@@ -16,21 +16,32 @@ TRANS = 1,
 BACKLOG = 2,
 };
 
+
+enum Response
+{
+  UNUSED = 3,
+  COL = 4,
+  SUCCESS = 5,
+};
+
+string strRes(int res);
+
+
 class AlohaNode{
 private:
   int state;
   double qr;
 public:
   int sleep;
-  bool isBacklogged;
 
   AlohaNode(double qr);
   ~AlohaNode();
 
   int getState();
-  void receivePacket();
+  bool receivePacket();
   int backlogTick();
-  void collided();
+  void collide();
+  bool isSending();
 
 };
 

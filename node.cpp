@@ -4,14 +4,22 @@ using namespace std;
 const double DEFAULT_QR = 0.01;
 const int NR_OF_NODES = 50;
 
-
+string strRes(int res){
+  switch(res){
+    case Response::UNUSED:
+      return "Transmission not attempted";
+    case Response::COL:
+      return "Transmission failed";
+    case Response::SUCCESS:
+      return "Transmission succesful";
+    default:
+    return "Unkown response provided";
+  }
+};
 
 AlohaNode::AlohaNode(double qr){
-  isBacklogged = false;
-  //cout << "inside constructor\n";
   state = Status::IDLE;
   AlohaNode::qr = qr;
-  // constructor
 }
 
 AlohaNode::~AlohaNode(){
@@ -25,14 +33,24 @@ int AlohaNode::getState(){
 }
 
 
-void AlohaNode::receivePacket(){
+bool AlohaNode::isSending(){
+  if(state == Status::TRANS){
+    return true;
+  }
+  else{
+    return false;
+  }
+}
+
+
+// Return whether the reception was possible
+bool AlohaNode::receivePacket(){
   if(state == Status::IDLE){
     state = Status::TRANS;
+    return true;
+    //return Arrival::SUCCESS;
   }
-  else if(state == Status::TRANS){
-    // Buffer the packet for real
-    // but do nothing on this dummy implementation
-  }
+    return false;
 }
 
 
@@ -47,10 +65,11 @@ int AlohaNode::backlogTick(){
 }
 
 
-void AlohaNode::collided(){
+void AlohaNode::collide(){
   state = Status::BACKLOG;
+  // TODO reconsider this randomness, it is not really accuarate,
+  // every node sleep duration is uniformly chosen from [0, 1/qr]
+  // instead of having a qr chance of sending every tick
   int mod = round(1/qr);
-  //cout << qr << endl;
   sleep = rand() % mod;
-  cout << "Collision!" << endl;
 }
