@@ -32,14 +32,13 @@ private:
   int state;
   double qr;
 public:
-  int sleep;
 
   AlohaNode(double qr);
   ~AlohaNode();
 
   int getState();
   bool receivePacket();
-  int backlogTick();
+  void backlogTick();
   void collide();
   bool isSending();
 

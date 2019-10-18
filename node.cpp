@@ -48,28 +48,21 @@ bool AlohaNode::receivePacket(){
   if(state == Status::IDLE){
     state = Status::TRANS;
     return true;
-    //return Arrival::SUCCESS;
   }
     return false;
 }
 
 
-int AlohaNode::backlogTick(){
-  sleep--;
-
-  if(sleep == 0){
-    state = Status::TRANS;
-    return 1;
+void AlohaNode::backlogTick(){
+  if(state == Status::BACKLOG){
+    int mod = round(1/qr);
+    if(rand() % mod == 1){
+      state = Status::TRANS;
+    }
   }
-  return 0;
 }
 
 
 void AlohaNode::collide(){
   state = Status::BACKLOG;
-  // TODO reconsider this randomness, it is not really accuarate,
-  // every node sleep duration is uniformly chosen from [0, 1/qr]
-  // instead of having a qr chance of sending every tick
-  int mod = round(1/qr);
-  sleep = rand() % mod;
 }
