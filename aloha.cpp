@@ -5,17 +5,20 @@
 #include <vector>
 #include "node.h"
 #include "iteration.h"
-using namespace std;
+#include "matplotlib-cpp/matplotlibcpp.h"
 
-const double DEFAULT_QR = 0.1;
-// The chance for a single node to receive a packet this slot
-const double QA = 0.05;
-const int NR_OF_NODES = 50;
-const int NR_OF_ITER = 20;
+using namespace std;
+namespace plt = matplotlibcpp;
+
+const double DEFAULT_QR = 0.01;
+// The chance for a single node to receive a packet this slot 1/e
+const double QA = 1/2.7182818284590452353602874;
+const int NR_OF_NODES = 100;
+const int NR_OF_ITER = 1000;
+const bool GENERATE_IMGS = true;
 
 
 void createArrivals(vector<AlohaNode>* vecPtr, ItData* dataPtr){
-  // TODO change how this randomness is calculated and used
   int posSpace = round(1/QA);
   int arrivals = 0;
   int receivedPackets = 0;
@@ -96,6 +99,89 @@ int transmit(vector<AlohaNode>* vecPtr){
 }
 
 
+void plotPackets(vector<ItData>* iterations){
+  vector<int> entering(iterations->size());
+  vector<int> leaving(iterations->size());
+  vector<int> slots(iterations->size());
+
+  for(int i = 0; i < iterations->size(); i++){
+    entering[i] = (*iterations)[i].acceptedArrivals;
+    slots[i] = i;
+
+    if((*iterations)[i].channelState == Response::SUCCESS){
+      leaving[i] = 1;
+    }
+    else{
+      leaving[i] = 0;
+    }
+  }
+
+  plt::named_plot("Packets arriving",slots, entering);
+  plt::named_plot("Packets departing",slots, leaving);
+  plt::legend();
+  plt::title("System arrivals and departures");
+  if(GENERATE_IMGS){
+      plt::save("./plots/system_arrivals");
+  }
+  else{
+    plt::show();
+  }
+  plt::clf();
+}
+
+
+void plotBacklog(vector<ItData>* iterations){
+  vector<int> backlogs(iterations->size());
+  vector<int> slots(iterations->size());
+
+  for(int i = 0; i < iterations->size(); i++){
+    backlogs[i] = (*iterations)[i].backlogSize;
+    slots[i] = i;
+  }
+
+  plt::plot(slots, backlogs);
+  plt::title("Backlog size per slot");
+  if(GENERATE_IMGS){
+      plt::save("./plots/backlog");
+  }
+  else{
+    plt::show();
+  }
+  plt::clf();
+}
+
+
+void plotSteadyState(vector<ItData>* iterations){
+  vector<double> steadyStateProb(NR_OF_NODES);
+  double avgBacklog = 0;
+  double succ = 0;
+
+
+  for(int i = 0; i < iterations->size(); i++){
+    steadyStateProb[(*iterations)[i].backlogSize] += 1 / (double )iterations->size();
+    avgBacklog += (*iterations)[i].backlogSize /(double )iterations->size();
+
+    if((*iterations)[i].channelState == Response::SUCCESS){
+      succ += 1.0 / NR_OF_ITER;
+    }
+
+  }
+  cout << "Avg succ rate: " << succ << endl;
+  cout << "Avg backlog: " << avgBacklog << endl;
+
+  plt::bar(steadyStateProb);
+  plt::title("Steady state probability for backlog size");
+  plt::xlim(0, NR_OF_NODES);
+  if(GENERATE_IMGS){
+      plt::save("./plots/steady_state");
+  }
+  else{
+    plt::show();
+  }
+  plt::clf();
+}
+
+
 int main(int argc, char *argv[]) {
   // Set the seed
   srand(time(NULL));
@@ -130,6 +216,9 @@ int main(int argc, char *argv[]) {
 
     currIt->channelState = transmit(&nodes);
     currIt-> backlogSize = getBacklog(&nodes);
-    currIt->print();
+    //currIt->print();
   }
+  plotBacklog(&data);
+  plotPackets(&data);
+  plotSteadyState(&data);
 }
