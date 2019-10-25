@@ -11,12 +11,14 @@ using namespace std;
 namespace plt = matplotlibcpp;
 
 const double DEFAULT_QR = 0.01;
+//const double DEFAULT_QR = 0.1;
 // The chance for a single node to receive a packet this slot 1/e
 const double QA = 1/2.7182818284590452353602874;
+//const double QA = 0.5;
 const int NR_OF_NODES = 100;
 const int NR_OF_ITER = 1000;
 const bool GENERATE_IMGS = true;
-
+const bool PSEUDO_BAY = true;
 
 void createArrivals(vector<AlohaNode>* vecPtr, ItData* dataPtr){
   int posSpace = round(1/QA);
@@ -118,10 +120,19 @@ void plotPackets(vector<ItData>* iterations){
 
   plt::named_plot("Packets arriving",slots, entering);
   plt::named_plot("Packets departing",slots, leaving);
+  plt::ylim(0,5);
   plt::legend();
   plt::title("System arrivals and departures");
   if(GENERATE_IMGS){
-      plt::save("./plots/system_arrivals");
+    string name = "system_arrivals";
+    string qr = to_string(DEFAULT_QR);
+    string qa = to_string(QA);
+    name += "_qr"+qr.substr(0,1)+","+qr.substr(2,2);
+    name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
+    name += "_slots"+to_string(NR_OF_ITER);
+    name += "_nodes"+to_string(NR_OF_NODES);
+
+    plt::save("./plots/"+name);
   }
   else{
     plt::show();
@@ -142,7 +153,15 @@ void plotBacklog(vector<ItData>* iterations){
   plt::plot(slots, backlogs);
   plt::title("Backlog size per slot");
   if(GENERATE_IMGS){
-      plt::save("./plots/backlog");
+      string name = "backlog";
+      string qr = to_string(DEFAULT_QR);
+      string qa = to_string(QA);
+      name += "_qr"+qr.substr(0,1)+","+qr.substr(2,2);
+      name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
+      name += "_slots"+to_string(NR_OF_ITER);
+      name += "_nodes"+to_string(NR_OF_NODES);
+      cout << name << endl;
+      plt::save("./plots/"+name);
   }
   else{
     plt::show();
@@ -173,7 +192,14 @@ void plotSteadyState(vector<ItData>* iterations){
   plt::title("Steady state probability for backlog size");
   plt::xlim(0, NR_OF_NODES);
   if(GENERATE_IMGS){
-      plt::save("./plots/steady_state");
+      string name = "steady_state";
+      string qr = to_string(DEFAULT_QR);
+      string qa = to_string(QA);
+      name += "_qr"+qr.substr(0,1)+","+qr.substr(2,2);
+      name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
+      name += "_slots"+to_string(NR_OF_ITER);
+      name += "_nodes"+to_string(NR_OF_NODES);
+      plt::save("./plots/"+name);
   }
   else{
     plt::show();
