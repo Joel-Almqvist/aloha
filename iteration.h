@@ -13,6 +13,7 @@ class ItData{
     int channelState;
     int arrivals;
     int acceptedArrivals;
+    double backlogEst;
 
     ItData();
     ~ItData();

@@ -17,9 +17,11 @@ string strRes(int res){
   }
 };
 
-AlohaNode::AlohaNode(double qr){
+AlohaNode::AlohaNode(double qr, double qa){
   state = Status::IDLE;
   AlohaNode::qr = qr;
+  AlohaNode::qa = qa;
+  AlohaNode::backlogEst = 0;
 }
 
 AlohaNode::~AlohaNode(){
@@ -30,6 +32,27 @@ AlohaNode::~AlohaNode(){
 
 int AlohaNode::getState(){
   return state;
+}
+
+// Only used in the Pseudo bayesian stabilization
+void AlohaNode::calcQr(){
+  if(backlogEst == 0){
+    qr = 1;
+  }
+  else{
+    qr =  min(1.0, 1.0 / backlogEst);
+  }
+}
+
+void AlohaNode::estimateBacklog(int feedback){
+  if(feedback == Response::UNUSED || feedback == Response::SUCCESS){
+    backlogEst = max(qa, backlogEst + qa -1);
+  } else if(feedback == Response::COL){
+    backlogEst = backlogEst + qa + 1 / (0.71828182845);
+  } else {
+    cout << "Bad input to estimateBacklog\n";
+  }
+  calcQr();
 }
 
 
@@ -44,9 +67,9 @@ bool AlohaNode::isSending(){
 
 
 // Return whether the reception was possible
-bool AlohaNode::receivePacket(){
+bool AlohaNode::receivePacket(bool pseudoBayFlag){
   if(state == Status::IDLE){
-    state = Status::TRANS;
+    state = pseudoBayFlag ? Status::BACKLOG : Status::TRANS;
     return true;
   }
     return false;
@@ -56,7 +79,7 @@ bool AlohaNode::receivePacket(){
 void AlohaNode::backlogTick(){
   if(state == Status::BACKLOG){
     int mod = round(1/qr);
-    if(rand() % mod == 1){
+    if(rand() % mod == 0){
       state = Status::TRANS;
     }
   }
@@ -65,4 +88,8 @@ void AlohaNode::backlogTick(){
 
 void AlohaNode::collide(){
   state = Status::BACKLOG;
+}
+
+double AlohaNode::getBacklogEst(){
+  return backlogEst;
 }

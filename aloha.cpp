@@ -28,7 +28,7 @@ void createArrivals(vector<AlohaNode>* vecPtr, ItData* dataPtr){
   for(size_t i = 0; i < vecPtr->size();i++){
     outcome = rand();
     if(outcome % posSpace == 1){
-      receivedPackets += (*vecPtr)[i].receivePacket();
+      receivedPackets += (*vecPtr)[i].receivePacket(PSEUDO_BAY);
       arrivals++;
     }
   }
@@ -65,6 +65,15 @@ void collide(vector<AlohaNode>* vecPtr, int endIndex){
   }
 }
 
+
+void reestimateBacklog(vector<AlohaNode>* nodes, int prevSlotFeedback){
+  for(size_t i = 0; i < nodes->size(); i++){
+    (*nodes)[i].estimateBacklog(prevSlotFeedback);
+  }
+}
+
+
+
 /* Make every node with state "transmitting" transmit and backlog them
  * if a collision occurs.
  * Returns a Response enum indicating the channel status.
@@ -79,7 +88,6 @@ int transmit(vector<AlohaNode>* vecPtr){
   for(size_t i = 0; i < vecPtr->size(); i++){
     currNode = &(*vecPtr)[i];
     transmitting = currNode->isSending();
-
 
     if(transmitting && alreadySending){
       currNode->collide();
@@ -99,6 +107,22 @@ int transmit(vector<AlohaNode>* vecPtr){
   }
   return channelState;
 }
+
+// Append meta data to the string base. Used to give plots a descriptive name.
+string generatePlotName(string base){
+  string qr = to_string(DEFAULT_QR);
+  string qa = to_string(QA);
+  string name = base.substr(0, base.length() -1);
+  name += "_qr"+qr.substr(0,1)+","+qr.substr(2,2);
+  name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
+  name += "_slots"+to_string(NR_OF_ITER);
+  name += "_nodes"+to_string(NR_OF_NODES);
+  if(PSEUDO_BAY){
+    name += "_PB";
+  }
+  return name;
+}
+
 
 
 void plotPackets(vector<ItData>* iterations){
@@ -120,53 +144,49 @@ void plotPackets(vector<ItData>* iterations){
 
   plt::named_plot("Packets arriving",slots, entering);
   plt::named_plot("Packets departing",slots, leaving);
-  plt::ylim(0,5);
+  //plt::ylim(0,5);
   plt::legend();
   plt::title("System arrivals and departures");
   if(GENERATE_IMGS){
-    string name = "system_arrivals";
-    string qr = to_string(DEFAULT_QR);
-    string qa = to_string(QA);
-    name += "_qr"+qr.substr(0,1)+","+qr.substr(2,2);
-    name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
-    name += "_slots"+to_string(NR_OF_ITER);
-    name += "_nodes"+to_string(NR_OF_NODES);
-
-    plt::save("./plots/"+name);
-  }
-  else{
-    plt::show();
+    plt::save("./plots/"+generatePlotName("system_arrivals"));
   }
   plt::clf();
 }
 
 
 void plotBacklog(vector<ItData>* iterations){
-  vector<int> backlogs(iterations->size());
-  vector<int> slots(iterations->size());
+  vector<double> backlogs(iterations->size());
+  vector<double> slots(iterations->size());
+  vector<double> backlogEstimates(iterations->size());
 
   for(int i = 0; i < iterations->size(); i++){
     backlogs[i] = (*iterations)[i].backlogSize;
+    backlogEstimates[i] = (*iterations)[i].backlogEst;
     slots[i] = i;
   }
 
-  plt::plot(slots, backlogs);
+  plt::named_plot("Backlog",slots, backlogs);
+  //plt::plot(slots, backlogs);
+  if(PSEUDO_BAY){
+    plt::named_plot("Est. backlog", slots, backlogEstimates);
+    //plt::plot( slots, backlogEstimates);
+  }
+  plt::legend();
+
   plt::title("Backlog size per slot");
   if(GENERATE_IMGS){
-      string name = "backlog";
-      string qr = to_string(DEFAULT_QR);
-      string qa = to_string(QA);
-      name += "_qr"+qr.substr(0,1)+","+qr.substr(2,2);
-      name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
-      name += "_slots"+to_string(NR_OF_ITER);
-      name += "_nodes"+to_string(NR_OF_NODES);
-      cout << name << endl;
-      plt::save("./plots/"+name);
-  }
-  else{
-    plt::show();
+      plt::save("./plots/"+generatePlotName("backlog"));
   }
   plt::clf();
+
+  // Create extra graph with no GUI hiding part of the graph
+  if(GENERATE_IMGS && PSEUDO_BAY){
+    plt::plot(slots, backlogEstimates);
+    plt::save("./plots/"+generatePlotName("backlog-extra"));
+    plt::clf();
+  }
+
+
 }
 
 
@@ -192,17 +212,7 @@ void plotSteadyState(vector<ItData>* iterations){
   plt::title("Steady state probability for backlog size");
   plt::xlim(0, NR_OF_NODES);
   if(GENERATE_IMGS){
-      string name = "steady_state";
-      string qr = to_string(DEFAULT_QR);
-      string qa = to_string(QA);
-      name += "_qr"+qr.substr(0,1)+","+qr.substr(2,2);
-      name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
-      name += "_slots"+to_string(NR_OF_ITER);
-      name += "_nodes"+to_string(NR_OF_NODES);
-      plt::save("./plots/"+name);
-  }
-  else{
-    plt::show();
+      plt::save("./plots/"+generatePlotName("steady_state"));
   }
   plt::clf();
 }
@@ -222,7 +232,7 @@ int main(int argc, char *argv[]) {
     qr = DEFAULT_QR;
   }
 
-  vector<AlohaNode> nodes(NR_OF_NODES, qr);
+  vector<AlohaNode> nodes(NR_OF_NODES, AlohaNode(qr, QA));
   // Store the result of every iteration in this vector
   vector<ItData> data(NR_OF_ITER);
   ItData* currIt;
@@ -237,6 +247,13 @@ int main(int argc, char *argv[]) {
     }
 
     createArrivals(&nodes, currIt);
+
+    // We have no feedback for the first slot and hence use a default value
+    if(PSEUDO_BAY && i != 0){
+      reestimateBacklog(&nodes, data[i-1].channelState);
+      currIt->backlogEst = nodes[0].getBacklogEst();
+    }
+
     // Decide whether a backlogged node is to transmit or not
     stepBacklog(&nodes);
 
