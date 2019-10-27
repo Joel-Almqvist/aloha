@@ -1,3 +1,6 @@
+/* Written by Joel Almqvist (joeal360) for TSIN01
+*/
+
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -10,25 +13,27 @@
 using namespace std;
 namespace plt = matplotlibcpp;
 
-const double DEFAULT_QR = 0.01;
-//const double DEFAULT_QR = 0.1;
-// The chance for a single node to receive a packet this slot 1/e
-const double QA = 1/2.7182818284590452353602874;
+const double qr = 0.01;
+const double QA = 1/2.7182818284590452353602874; // 1/e
 //const double QA = 0.5;
 const int NR_OF_NODES = 100;
 const int NR_OF_ITER = 1000;
 const bool GENERATE_IMGS = true;
 const bool PSEUDO_BAY = true;
 
+// Creates an arrival for each node and store the nodes behavior to this event
+// in the data class ItData.
 void createArrivals(vector<AlohaNode>* vecPtr, ItData* dataPtr){
   int posSpace = round(1/QA);
   int arrivals = 0;
   int receivedPackets = 0;
   int outcome;
+  AlohaNode* currNode;
   for(size_t i = 0; i < vecPtr->size();i++){
+    currNode = &(*vecPtr)[i];
     outcome = rand();
-    if(outcome % posSpace == 1){
-      receivedPackets += (*vecPtr)[i].receivePacket(PSEUDO_BAY);
+    if(outcome % posSpace == 0){
+      receivedPackets += currNode->receivePacket(PSEUDO_BAY, dataPtr->id);
       arrivals++;
     }
   }
@@ -36,14 +41,14 @@ void createArrivals(vector<AlohaNode>* vecPtr, ItData* dataPtr){
   dataPtr->acceptedArrivals = receivedPackets;
 }
 
-
+// Check whether a backlog node wants to start transmitting this iteration
 void stepBacklog(vector<AlohaNode>* vecPtr){
   for(size_t i = 0; i < vecPtr->size();i++){
     (*vecPtr)[i].backlogTick();
   }
 }
 
-
+// Get the backlog's size
 int getBacklog(vector<AlohaNode>* vecPtr){
   int counter = 0;
   for(size_t i = 0; i < vecPtr->size();i++){
@@ -73,18 +78,22 @@ void reestimateBacklog(vector<AlohaNode>* nodes, int prevSlotFeedback){
 }
 
 
-
 /* Make every node with state "transmitting" transmit and backlog them
- * if a collision occurs.
- * Returns a Response enum indicating the channel status.
+ * if a collision occurs. Determine the channel's state afterwards.
+ *
+ * Store data from the algorithm above in the provided ItData object
 */
-int transmit(vector<AlohaNode>* vecPtr){
+void transmit(vector<AlohaNode>* vecPtr, ItData* data){
   int channelState = Response::UNUSED;
 
   bool alreadySending = false;
   bool sorted = false;
   bool transmitting;
   AlohaNode* currNode;
+
+  // If a transmission is succesful store the succesful node here
+  AlohaNode* posTransNode;
+
   for(size_t i = 0; i < vecPtr->size(); i++){
     currNode = &(*vecPtr)[i];
     transmitting = currNode->isSending();
@@ -101,19 +110,24 @@ int transmit(vector<AlohaNode>* vecPtr){
       }
     }
     else if(transmitting){
+      posTransNode = &(*currNode);
       channelState = Response::SUCCESS;
       alreadySending = true;
     }
   }
-  return channelState;
+  data->channelState = channelState;
+
+  if(channelState == Response::SUCCESS){
+    data->slotsWaited = data->id - posTransNode->arrivalTime;
+  }
 }
 
 // Append meta data to the string base. Used to give plots a descriptive name.
 string generatePlotName(string base){
-  string qr = to_string(DEFAULT_QR);
+  string QR = to_string(qr);
   string qa = to_string(QA);
   string name = base.substr(0, base.length() -1);
-  name += "_qr"+qr.substr(0,1)+","+qr.substr(2,2);
+  name += "_qr"+QR.substr(0,1)+","+QR.substr(2,2);
   name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
   name += "_slots"+to_string(NR_OF_ITER);
   name += "_nodes"+to_string(NR_OF_NODES);
@@ -123,8 +137,7 @@ string generatePlotName(string base){
   return name;
 }
 
-
-
+// Plots system arrivals and system departures for every slot
 void plotPackets(vector<ItData>* iterations){
   vector<int> entering(iterations->size());
   vector<int> leaving(iterations->size());
@@ -153,7 +166,7 @@ void plotPackets(vector<ItData>* iterations){
   plt::clf();
 }
 
-
+// Plots the value of the backlog for every slot
 void plotBacklog(vector<ItData>* iterations){
   vector<double> backlogs(iterations->size());
   vector<double> slots(iterations->size());
@@ -195,7 +208,6 @@ void plotSteadyState(vector<ItData>* iterations){
   double avgBacklog = 0;
   double succ = 0;
 
-
   for(int i = 0; i < iterations->size(); i++){
     steadyStateProb[(*iterations)[i].backlogSize] += 1 / (double )iterations->size();
     avgBacklog += (*iterations)[i].backlogSize /(double )iterations->size();
@@ -217,20 +229,64 @@ void plotSteadyState(vector<ItData>* iterations){
   plt::clf();
 }
 
+/* Plots the average packet delay for the Pseudo Bayesian stabilization
+* algorithm.
+*/
+void plotAvgPacketDelayPB(){
+  double e = 2.7182818284590452353602874;
+  // May not be 0
+  double startVal = 0.05;
+  // endVal is not actually included, the range is [startval, endVal)
+  double endVal = 1.0/e;
+  int intervals = 100;
+  double stepSize = (endVal-startVal) / intervals;
+  double lambda;
+  vector<double> arrRates(intervals);
+  vector<double> avgDelay(intervals);
 
-int main(int argc, char *argv[]) {
-  // Set the seed
-  srand(time(NULL));
-  double qr;
-  if(argc > 2){
-    qr = atof(argv[2]);
-    if(qr < 0 || qr > 1){
-      qr = DEFAULT_QR;
+  for(int i = 0; i < intervals; i++){
+    lambda = startVal + i*stepSize;
+    arrRates[i] = lambda;
+    avgDelay[i] = (e-0.5) / (1.0-lambda*e) -
+      (e-1)*(exp(lambda)-1)/(lambda*(1-(e-1)*(exp(lambda)-1)));
+  }
+
+  // NOTE: These values are hardcoded and taken from the cout of
+  // plotSystemPacketWait() when running the whole application with differing
+  // lambda values,
+  vector<double> simWaitTime{509.099, 522.176, 545.068, 532.424};
+  vector<double> arrivalRate{0.05, 0.15, 0.25, 0.35};
+  plt::plot(arrRates, avgDelay);
+  plt::plot(arrivalRate, simWaitTime, "bo");
+  plt::title("Average delay in slots as a function of arrival rates");
+  if(GENERATE_IMGS){
+    plt::save("./plots/avg-packet-delays");
+  }
+  plt::clf();
+}
+
+// Calculate the average delay of every succesfull transmission. The output is
+// simply printed (and later hardcoded).
+void calcAvgDelay(vector<ItData>* dataVect){
+  double slotsCtr = 0;
+  double slotsWtd = 0;
+
+  ItData* data;
+  for(int i = 0; i < dataVect->size(); i++){
+    data = &(*dataVect)[i];
+    if(data->slotsWaited != -1){
+      slotsCtr += 1;
+      slotsWtd += data->slotsWaited;
     }
   }
-  else{
-    qr = DEFAULT_QR;
-  }
+  cout << "Avg wait for qa = " << QA<< " is "<< slotsWtd/slotsCtr << endl;
+
+}
+
+
+int main(int argc, char *argv[]) {
+  // Set the random seed to the current time
+  srand(time(NULL));
 
   vector<AlohaNode> nodes(NR_OF_NODES, AlohaNode(qr, QA));
   // Store the result of every iteration in this vector
@@ -256,12 +312,14 @@ int main(int argc, char *argv[]) {
 
     // Decide whether a backlogged node is to transmit or not
     stepBacklog(&nodes);
-
-    currIt->channelState = transmit(&nodes);
+    transmit(&nodes, currIt);
     currIt-> backlogSize = getBacklog(&nodes);
     //currIt->print();
   }
   plotBacklog(&data);
   plotPackets(&data);
   plotSteadyState(&data);
+  if(PSEUDO_BAY) plotAvgPacketDelayPB();
+  calcAvgDelay(&data);
+
 }
