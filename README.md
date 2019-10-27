@@ -12,3 +12,6 @@ The default behavior is to generate graphs under the subfolder plots, the values
 
 ## Dependencies
 This project requires C++11, Python 2.7 and certain Python libraries used by the matplotlib C++ wrapper. Notably matplotlib, numpy and the dev-version of python are all required, but check https://github.com/lava/matplotlib-cpp to find all subdependencies.
+
+## Acknowledgments
+I did not write anything in matplotlibcpp.h, it is simply a dependency I added to make the installation easier. The file is copied from https://github.com/lava/matplotlib-cpp
