@@ -102,3 +102,8 @@ void AlohaNode::collide(){
 double AlohaNode::getBacklogEst(){
   return backlogEst;
 }
+
+
+void AlohaNode::successTrans(){
+  state = Status::IDLE;
+}

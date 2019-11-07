@@ -49,6 +49,7 @@ public:
   void calcQr();
   void estimateBacklog(int feedback);
   double getBacklogEst();
+  void successTrans();
 };
 
 #endif // ALOHANODE_H

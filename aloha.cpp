@@ -13,11 +13,13 @@
 using namespace std;
 namespace plt = matplotlibcpp;
 
-const double qr = 0.01;
-const double QA = 1/2.7182818284590452353602874; // 1/e
-//const double QA = 0.5;
 const int NR_OF_NODES = 100;
 const int NR_OF_ITER = 1000;
+const double qr = 0.1;
+//const double lambda = 1/2.7182818284590452353602874; // 1 / e
+const double lambda = 0.5;
+double QA = 1.0 - exp(-lambda/NR_OF_NODES); // QA = 1 - e^(-lambda/m)
+//const double QA = 0.5;
 const bool GENERATE_IMGS = true;
 const bool PSEUDO_BAY = true;
 
@@ -118,6 +120,7 @@ void transmit(vector<AlohaNode>* vecPtr, ItData* data){
   data->channelState = channelState;
 
   if(channelState == Response::SUCCESS){
+    posTransNode->successTrans();
     data->slotsWaited = data->id - posTransNode->arrivalTime;
   }
 }
@@ -128,7 +131,7 @@ string generatePlotName(string base){
   string qa = to_string(QA);
   string name = base.substr(0, base.length() -1);
   name += "_qr"+QR.substr(0,1)+","+QR.substr(2,2);
-  name += "_qa"+qa.substr(0,1)+","+qa.substr(2,2);
+  name += "_qa"+qa.substr(0,1)+","+qa.substr(2,4);
   name += "_slots"+to_string(NR_OF_ITER);
   name += "_nodes"+to_string(NR_OF_NODES);
   if(PSEUDO_BAY){
@@ -138,22 +141,29 @@ string generatePlotName(string base){
 }
 
 // Plots system arrivals and system departures for every slot
-void plotPackets(vector<ItData>* iterations){
+void plotArrivals(vector<ItData>* iterations){
   vector<int> entering(iterations->size());
   vector<int> leaving(iterations->size());
   vector<int> slots(iterations->size());
 
-  for(int i = 0; i < iterations->size(); i++){
-    entering[i] = (*iterations)[i].acceptedArrivals;
+
+  // Ugly hack to handle the first iteration manually
+  slots[0] = 0;
+  entering[0] = (*iterations)[0].acceptedArrivals;
+  (*iterations)[0].channelState == Response::SUCCESS ? leaving[0] = 1 : leaving[0] = 0;
+
+  for(int i = 1; i < iterations->size(); i++){
+    entering[i] = (*iterations)[i].acceptedArrivals + entering[i-1];
     slots[i] = i;
 
     if((*iterations)[i].channelState == Response::SUCCESS){
-      leaving[i] = 1;
+      leaving[i] = 1 + leaving[i-1];
     }
     else{
-      leaving[i] = 0;
+      leaving[i] = leaving[i-1];
     }
   }
+
 
   plt::named_plot("Packets arriving",slots, entering);
   plt::named_plot("Packets departing",slots, leaving);
@@ -178,6 +188,7 @@ void plotBacklog(vector<ItData>* iterations){
     slots[i] = i;
   }
 
+
   plt::named_plot("Backlog",slots, backlogs);
   //plt::plot(slots, backlogs);
   if(PSEUDO_BAY){
@@ -199,7 +210,6 @@ void plotBacklog(vector<ItData>* iterations){
     plt::clf();
   }
 
-
 }
 
 
@@ -207,26 +217,35 @@ void plotSteadyState(vector<ItData>* iterations){
   vector<double> steadyStateProb(NR_OF_NODES);
   double avgBacklog = 0;
   double succ = 0;
+  // We draw from [0, backlogMaxSize], it may not be 0
+  int backlogMaxSize = 1;
+  int currBacklogSize;
 
   for(int i = 0; i < iterations->size(); i++){
-    steadyStateProb[(*iterations)[i].backlogSize] += 1 / (double )iterations->size();
-    avgBacklog += (*iterations)[i].backlogSize /(double )iterations->size();
+    currBacklogSize = (*iterations)[i].backlogSize;
+    steadyStateProb[currBacklogSize] += 1 / (double) iterations->size();
+    avgBacklog += currBacklogSize / (double) iterations->size();
 
     if((*iterations)[i].channelState == Response::SUCCESS){
       succ += 1.0 / NR_OF_ITER;
     }
 
+    if(currBacklogSize > backlogMaxSize){
+      backlogMaxSize = currBacklogSize;
+    }
   }
+
   cout << "Avg succ rate: " << succ << endl;
   cout << "Avg backlog: " << avgBacklog << endl;
 
   plt::bar(steadyStateProb);
   plt::title("Steady state probability for backlog size");
-  plt::xlim(0, NR_OF_NODES);
+  plt::xlim(0, backlogMaxSize);
   if(GENERATE_IMGS){
       plt::save("./plots/"+generatePlotName("steady_state"));
   }
   plt::clf();
+
 }
 
 /* Plots the average packet delay for the Pseudo Bayesian stabilization
@@ -240,22 +259,22 @@ void plotAvgPacketDelayPB(){
   double endVal = 1.0/e;
   int intervals = 100;
   double stepSize = (endVal-startVal) / intervals;
-  double lambda;
+  double lambda2;
   vector<double> arrRates(intervals);
   vector<double> avgDelay(intervals);
 
   for(int i = 0; i < intervals; i++){
-    lambda = startVal + i*stepSize;
-    arrRates[i] = lambda;
-    avgDelay[i] = (e-0.5) / (1.0-lambda*e) -
-      (e-1)*(exp(lambda)-1)/(lambda*(1-(e-1)*(exp(lambda)-1)));
+    lambda2 = startVal + i*stepSize;
+    arrRates[i] = lambda2;
+    avgDelay[i] = (e-0.5) / (1.0-lambda2*e) -
+      (e-1)*(exp(lambda2)-1)/(lambda2*(1-(e-1)*(exp(lambda2)-1)));
   }
 
   // NOTE: These values are hardcoded and taken from the cout of
   // plotSystemPacketWait() when running the whole application with differing
   // lambda values,
-  vector<double> simWaitTime{509.099, 522.176, 545.068, 532.424};
-  vector<double> arrivalRate{0.05, 0.15, 0.25, 0.35};
+  vector<double> simWaitTime{0.465, 1.33071, 6, 17.5576, 45.7674, 63.46, 68};
+  vector<double> arrivalRate{0.05, 0.15, 0.25, 0.35, 0.4, 0.45, 0.5};
   plt::plot(arrRates, avgDelay);
   plt::plot(arrivalRate, simWaitTime, "bo");
   plt::title("Average delay in slots as a function of arrival rates");
@@ -279,7 +298,7 @@ void calcAvgDelay(vector<ItData>* dataVect){
       slotsWtd += data->slotsWaited;
     }
   }
-  cout << "Avg wait for qa = " << QA<< " is "<< slotsWtd/slotsCtr << endl;
+  cout << "Avg wait for lambda = " << lambda<< " is "<< slotsWtd/slotsCtr << endl;
 
 }
 
@@ -317,7 +336,7 @@ int main(int argc, char *argv[]) {
     //currIt->print();
   }
   plotBacklog(&data);
-  plotPackets(&data);
+  plotArrivals(&data);
   plotSteadyState(&data);
   if(PSEUDO_BAY) plotAvgPacketDelayPB();
   calcAvgDelay(&data);
